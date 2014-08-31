@@ -1,0 +1,564 @@
+<html>
+  <head>
+    <title>FFZ - Amphibian.com</title>
+    <meta id="viewport" name="viewport" content="width=device-width,height=device-height,user-scalable=no" />
+    <style>
+	    canvas { border: 1px solid #000000; } 
+    </style>
+    <!--[if IE]><script src="scripts/excanvas.compiled.js"></script><![endif]--> 
+    <script src="//ajax.googleapis.com/ajax/libs/dojo/1.4.5/dojo/dojo.js"> djConfig="parseOnLoad: true"></script>
+    <script type="text/javascript" src="/js/soundmanager2-nodebug-jsmin.js"></script>
+    <script type="text/javascript" src="/socket.io/socket.io.js"></script>
+    <script type="text/javascript" src="/js/microevent.js"></script>
+    <script type="text/javascript" src="/js/Polygon.js"></script>
+    <script type="text/javascript" src="/js/shadow.js"></script>
+    <script type="text/javascript" src="/js/frog.js"></script>
+    <script type="text/javascript" src="/js/Snake.js"></script>
+    <script type="text/javascript" src="/js/Sprite.js"></script>
+    <script type="text/javascript" src="/js/world.js"></script>
+    <script type="text/javascript" src="/js/loader.js"></script>
+    <script type="text/javascript">
+
+    var shadows = true;
+
+    var sptest = false;
+
+    var sckt;
+
+    var ribbitSound;
+    var splashSound;
+    var rainSound;
+    
+    soundManager.setup({
+    	  url: '/soundmanager2/',
+    	  flashVersion: 9, // optional: shiny features (default = 8)
+    	  // optional: ignore Flash where possible, use 100% HTML5 mode
+    	  // preferFlash: false,
+    	  onready: function() {
+
+    	  	  ribbitSound = soundManager.createSound({
+    	            id: 'ribbitSound',
+    	            url: 'sounds/frog_ribbit02.mp3',
+    	  	        onload: function() {
+    	  	            console.log("ribbit sound loaded");
+    	  	        }
+    	  	  });
+
+    	  	  splashSound = soundManager.createSound({
+    	  		    id: 'splashSound',
+    	  		    url: 'sounds/splash05.mp3',
+    	  	        onload: function() {
+    	  	            console.log("splash sound loaded");
+    	  	        }
+    	  	  });
+    	  	  
+    	  	  rainSound = soundManager.createSound({
+    	  	        id: 'rainSound',
+    	  	        url: 'sounds/rain.mp3',
+    	  	        onload: function() {
+    	  	            console.log("rain sound loaded");
+    	                this.onposition(this.duration - 1500, function() {
+    	                    this.setPosition(500);
+    	                });
+    	  	        }
+    	  	  });
+
+    	  	  thunderSound = soundManager.createSound({
+    	  		    id: 'thunderSound',
+    	  		    url: 'sounds/thunder3.mp3',
+    	  	        onload: function() {
+    	  	            console.log("thunder sound loaded");
+    	  	        }
+    	  	  });
+    	  	  
+    	  	  soundManager.load('ribbitSound');
+    	  	  soundManager.load('splashSound');
+    	      soundManager.load('rainSound');
+    	      soundManager.load('thunderSound');
+    		  
+    	  }
+   	});
+
+  	  
+
+    var areaId = 7;
+    
+  	var debug = false;
+  	var paused = false;
+      
+    var frog, world;
+	var canvas, ctx;
+
+    var rightBound, lowerBound;
+
+    var worldWidth, worldHeight;
+	
+	var viewport = { 'x':0, 'y':0 };
+
+    var d;
+
+    var sprites = [];
+    var otherfrogs = [];
+
+    var currentArea = null;
+
+    var updateVar = null;
+
+    var postWorldLoad = null;
+
+    function checkForImgLoad() {
+
+    	var complete = true;
+    	for (var t = 0; t < TileImgCache.length && complete; t++) {
+            if (TileImgCache[t]) {
+                complete = complete && TileImgCache[t].complete;
+            }
+    	}
+/*
+    	for (var o = 0; o < ObjectImgCache.length && complete; o++) {
+            if (ObjectImgCache[o]) {
+                complete = complete && ObjectImgCache[o].complete;
+            }
+    	}
+    	for (var i = 0; i < ImgCache.length && complete; i++) {
+            if (ImgCache[i]) {
+                complete = complete && ImgCache[i].complete;
+            }
+    	}
+*/
+    	
+    	if (complete) {
+    	
+    	    try {
+    	    
+    	        if (!sckt) {
+    	
+                    sckt = io.connect("http://localhost:4000");
+                    sckt.on("connect", function() {
+                        console.log("socket connected");
+                        dojo.byId("socketstatus").innerHTML = "websockets? <span style='color: green'>ok</span>";
+                        frog.bind('move', function(fdata) {
+                            fdata.inArea = currentArea.id;
+                            sckt.emit("frogmove", fdata);
+                        });
+                        frog.bind('ribbit', function(fdata) {
+                            fdata.inArea = currentArea.id;
+                            sckt.emit("ribbit", fdata);
+                        });
+                    });
+                    sckt.on("newfrog", function(fid) {
+                        console.log("new frog joined! id = " + fid);
+                        var nf = new Frog();
+                        nf.uid = fid;
+                        sprites.push(nf);
+                        otherfrogs.push(nf);
+                    });
+                    sckt.on("byefrog", function(fid) {
+                        console.log("frog leaves! id = " + fid);
+                        for (var f = 0; f < otherfrogs.length; f++) {
+                            if (otherfrogs[f].uid == fid) {
+                                otherfrogs[f].destroy();
+                                otherfrogs.splice(f, 1);
+                            }
+                        }
+                    });
+                    sckt.on("fm", function(fdata) {
+                        for (var f = 0; f < otherfrogs.length; f++) {
+                            if (otherfrogs[f].uid == fdata.id) {
+                                otherfrogs[f].imgId = fdata.imgId;
+                                otherfrogs[f].position = fdata.pos;
+                                otherfrogs[f].inArea = fdata.inArea;
+                            }
+                        }
+                    });
+                    sckt.on("rbbt", function(fdata) {
+                        for (var f = 0; f < otherfrogs.length; f++) {
+                            if (otherfrogs[f].uid == fdata.id) {
+                                otherfrogs[f].direction = fdata.dir;
+                                otherfrogs[f].ribbit(ribbitSound);
+                            }
+                        }
+                    });
+                    sckt.on("weatherUpdate", function(wdata) {
+                        setWeather(wdata);
+                    });
+                    sckt.on("sm", function(odata) {
+                        if (odata.inArea = currentArea.id) {
+                            for (var s = 0; s < sprites.length; s++) {
+                                if (sprites[s].id == odata.objid) {
+                                    sprites[s].position = odata.position;
+                                }
+                            }
+                        }
+                    });
+                    sckt.emit("startup", {fid: frog.uid});
+                    
+                }
+                
+            } catch (e) {
+                console.log("sockets not available! " + e);
+                dojo.byId("socketstatus").innerHTML = "websockets? <span style='color: red'>failed</span>";
+            }
+    	
+    		updateVar = window.setInterval(update, 35);
+    		
+    	} else {
+        	window.setTimeout(checkForImgLoad, 250);
+    	}
+
+    }
+    
+    function firstTimeInit() {
+    
+        if (frog == null) {
+            frog = new Frog();
+            frog.position = { x: 20, y: 20 };
+            dojo.byId("myfrogid").innerHTML = "Your frog id is " + frog.uid;
+        }
+        
+        canvas = document.getElementById("game");
+        ctx = canvas.getContext("2d");
+
+        dojo.connect(document, "onkeydown", keyDownHandler);
+        dojo.connect(document, "onkeyup", keyUpHandler);
+        dojo.connect(canvas, "ontouchstart", canvasTouchHandler);
+        
+        weatherCheck();
+        
+        init();
+    
+    }
+    
+      function init() {
+
+          world = new World();
+          if (lastKnownWeather) {
+              world.weather = lastKnownWeather.conditions;
+          }
+          sprites = [];
+          
+          var spriteData;
+          if (window.opener && window.opener.currentArea) {
+              currentArea = window.opener.currentArea;
+              world.matrix = window.opener.currentArea.groundGrid;
+              world.objects = window.opener.currentArea.objectGrid;
+              world.objectList = window.opener.currentArea.objectList;
+              spriteData = window.opener.currentArea.sprites;
+          } else {
+              world.matrix = currentArea.groundGrid;
+              world.objects = currentArea.objectGrid;
+              world.objectList = currentArea.objectList;
+              spriteData = currentArea.sprites;
+          }
+
+          if (spriteData == null) spriteData = new Array();
+          
+          for (var s = 0; s < spriteData.length; s++) {
+              var sd = spriteData[s];
+              var stype = sd.type;
+              var spos = sd.startPosition;
+              sprites.push(eval("new " + stype + "(" + spos.x + "," + spos.y + ")"));
+          }
+
+if (world.objectList) {
+
+         for (var qq = 0; qq < world.objectList.length; qq++) {
+              var xx = world.objectList[qq];
+              var o = dojo.clone(ObjCache[xx.type]);
+              var sp = new Sprite(o, 0, 0);
+              sp.position.x = xx.position.x;
+              sp.position.y = xx.position.y;
+              sp.id = qq;
+              sp.bind('move', function(data) {
+                  if (sckt) {
+                      data.inArea = currentArea.id;
+                      sckt.emit('objmove', data);
+                  }
+              });
+              sprites.push(sp);
+          }
+
+} else {
+          var sc = 1;
+          for (var io = 0; io < world.objects.length; io++) {
+              var innerArray = world.objects[io];
+              if (innerArray != null) {
+                  for (var jo = 0; jo < innerArray.length; jo++) {
+                      var o = innerArray[jo];
+                      if (o != null) {
+                          var sp = new Sprite(o, io, jo);
+                          sp.id = sc++;
+                          sp.bind('move', function(data) {
+                              if (sckt) {
+                                  data.inArea = currentArea.id;
+                                  sckt.emit('objmove', data);
+                              }
+                          });
+                          sprites.push(sp);
+                      }
+                  }
+              }
+          }
+}
+
+ 
+          sprites.push(frog);
+          sprites = sprites.concat(otherfrogs);
+          
+          rightBound = canvas.width - (world.getGridWidth() * world.tileWidth);
+          lowerBound = canvas.height - (world.getGridHeight() * world.tileHeight); 
+
+          worldWidth = world.getWidth();
+          worldHeight = world.getHeight();
+
+          if (postWorldLoad != null) {
+        	  postWorldLoad();
+        	  postWorldLoad = null;
+          }
+          
+          d = new Date();
+
+          window.setTimeout(checkForImgLoad, 250);
+
+      }
+
+      function moveLeft() {
+          frog.moveLeft();
+          if (viewport.x < 0 && (viewport.x + frog.position.x) < (canvas.width / 2)) {
+              viewport.x += 10;
+          }
+      }
+
+      function moveRight() {
+          frog.moveRight();
+          if (viewport.x > rightBound && (viewport.x + frog.position.x) > (canvas.width / 2)) {
+              viewport.x -= 10;
+          }
+      }
+
+      function moveUp() {
+          frog.moveUp();
+          if (viewport.y < 0 && (viewport.y + frog.position.y) < (canvas.height / 2)) {
+              viewport.y += 10;
+          }
+      }
+      
+      function moveDown() {
+          frog.moveDown();
+          if (viewport.y > lowerBound && (viewport.y + frog.position.y) > (canvas.height / 2)) {
+              viewport.y -= 10;
+          }
+      }
+      
+
+      function update() {
+
+          var elapsed = (new Date()) - d;
+          d = new Date();
+
+          if (worldWidth - Math.round(frog.position.x) < (canvas.width / 2)) {
+              viewport.x = -(worldWidth - canvas.width);
+          } else if (Math.round(frog.position.x) > (canvas.width / 2)) {
+        	  viewport.x = -(Math.round(frog.position.x) - (canvas.width / 2));
+          } else {
+              viewport.x = 0;
+          }
+
+          if (worldHeight - Math.round(frog.position.y) < (canvas.height / 2)) {
+              viewport.y = -(worldHeight - canvas.height);
+          } else if (Math.round(frog.position.y) > (canvas.height / 2)) {
+        	  viewport.y = -(Math.round(frog.position.y) - (canvas.height / 2));
+          } else {
+              viewport.y = 0;
+          }
+
+          if (frog.position.y > worldHeight) {
+              //console.debug("froggy's moving south");
+              if (currentArea.links) {
+                  for (var i = 0; i < currentArea.links.length; i++) {
+                      if (currentArea.links[i].type == 1) {
+                          window.clearInterval(updateVar);
+                    	  loadArea(currentArea.links[i].areaId, init);
+                    	  postWorldLoad = function() { frog.position.y = 0; };
+                    	  return;
+                      }
+                  }
+              }
+       	  } else if (frog.position.y < 0) {
+              //console.debug("froggy's moving north");
+              if (currentArea.links) {
+                  for (var i = 0; i < currentArea.links.length; i++) {
+                      if (currentArea.links[i].type == 0) {
+                          window.clearInterval(updateVar);
+                    	  loadArea(currentArea.links[i].areaId, init);
+                    	  postWorldLoad = function() { frog.position.y = worldHeight; };
+                    	  return;
+                      }
+                  }
+              }
+       	  } else if (frog.position.x > worldWidth) {
+              //console.debug("froggy's moving east");
+              if (currentArea.links) {
+                  for (var i = 0; i < currentArea.links.length; i++) {
+                      if (currentArea.links[i].type == 2) {
+                          window.clearInterval(updateVar);
+                    	  loadArea(currentArea.links[i].areaId, init);
+                    	  postWorldLoad = function() { frog.position.x = 0; };
+                    	  return;
+                      }
+                  }
+              }
+       	  } else if (frog.position.x < 0) {
+              //console.debug("froggy's moving west");
+              if (currentArea.links) {
+                  for (var i = 0; i < currentArea.links.length; i++) {
+                      if (currentArea.links[i].type == 3) {
+                          window.clearInterval(updateVar);
+                    	  loadArea(currentArea.links[i].areaId, init);
+                    	  postWorldLoad = function() { frog.position.x = worldWidth; };
+                    	  return;
+                      }
+                  }
+              }
+          }
+
+          for (var e = 0; e < sprites.length; e++) {
+              sprites[e].update(elapsed);
+          }
+          
+          world.update(elapsed);
+    	  
+          ctx.clearRect(0,0,canvas.width,canvas.height);
+
+          ctx.save();
+          //ctx.translate(viewport.x,viewport.y);
+          
+          world.draw(ctx);
+
+          ctx.restore();
+
+      }
+
+      function keyUpHandler(e) {
+
+          switch(e.keyCode) {
+
+          case dojo.keys.LEFT_ARROW:
+          case dojo.keys.RIGHT_ARROW:
+          case dojo.keys.UP_ARROW:
+          case dojo.keys.DOWN_ARROW:
+              frog.stopMoving();
+              break;
+
+          }
+
+      }
+      
+      function keyDownHandler(e) {
+
+          if (frog.moving) return;
+    	  
+          switch(e.keyCode) {
+
+          case dojo.keys.LEFT_ARROW:
+              frog.moveLeft();
+              break;
+          case dojo.keys.RIGHT_ARROW:
+              frog.moveRight();
+              break;
+          case dojo.keys.UP_ARROW:
+              frog.moveUp();
+              break;
+          case dojo.keys.DOWN_ARROW:
+              frog.moveDown();
+              break;
+          case 82:
+              frog.ribbit(ribbitSound);
+        	  //ribbitSound.play();
+        	  break;
+          default:
+              console.debug(e.keyCode);
+
+          }
+    	  
+      }
+      
+      function canvasTouchHandler(e) {
+      
+          if (e.touches.length == 1) {
+              frog.ribbit(ribbitSound);
+          }
+      
+      }
+
+      function pause() {
+
+    	  if (paused) {
+    		  d = new Date();
+    		  updateVar = window.setInterval(update, 35);
+    		  paused = false;
+    	  } else {
+              window.clearInterval(updateVar);
+              paused = true;
+    	  }
+
+      }
+      
+      var lastKnownWeather;
+      
+      function weatherCheck() {
+      
+          dojo.xhrGet({
+              url: "/weather",
+              handleAs: "json",
+              load: setWeather
+          });
+          if (!sckt) {
+              console.log("websocket not available - polling for weather");
+              window.setTimeout(weatherCheck, 300000);
+          }
+     
+      }
+      
+      function setWeather(w) {
+          console.log("setting weather");
+          dojo.byId("temp").innerHTML = w.temp + "&deg;F";
+          dojo.byId("weather").innerHTML = w.conditions;
+          window.lastKnownWeather = w;
+          frog.temperature = w.temp;
+          world.weather = w.conditions;
+      }
+
+      dojo.addOnLoad(loadTiles);
+      
+      
+    </script>
+    <style type="text/css">
+      
+    </style>
+  </head>
+  <body>
+    <div style="float: left">
+      <canvas id="game" width="400" height="300"></canvas>
+    </div>
+
+    <div style="float: left; margin-left: 10px;">
+        <p id="myfrogid"></p>
+        <p id="socketstatus"></p>
+        <p id="temp"></p>
+        <p id="weather"></p>
+        <p id="html5logo"><a href="http://www.w3.org/html/logo/">
+<img src="http://www.w3.org/html/logo/badge/html5-badge-h-connectivity-graphics-multimedia.png" width="197" height="64" alt="HTML5 Powered with Connectivity / Realtime, Graphics, 3D &amp; Effects, and Multimedia" title="HTML5 Powered with Connectivity / Realtime, Graphics, 3D &amp; Effects, and Multimedia">
+</a></p>
+    </div>
+
+    <div style="clear: both;">
+
+    <p><input type="button" value="pause" onclick="pause();"></p>
+         
+    <p>Weather data provided by<br/>
+    <a href="http://www.wunderground.com"><img src="/wundergroundLogo_4c_horz.png"/></a></p>
+         
+    </div>
+  </body>
+</html>
