@@ -2,7 +2,7 @@
     function loadTiles() {
 
 		var xhrArgs = {
-				url: "/tiles",
+				url: "tiles",
 				handleAs: "json",
 				sync: true,
 				load: function(data) {
@@ -37,7 +37,7 @@
     function loadObjects() {
 
 		var xhrArgs = {
-				url: "/objects",
+				url: "objects",
 				handleAs: "json",
 				sync: true,
 				load: function(data) {
@@ -57,7 +57,7 @@
     function loadImages() {
 
 		var xhrArgs = {
-				url: "/images",
+				url: "images",
 				handleAs: "json",
 				sync: true,
 				load: function(data) {
