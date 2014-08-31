@@ -17,7 +17,7 @@
 						window.Tiles[n] = data[i];
 						
 						window.TileImgCache[tid] = new Image();
-						window.TileImgCache[tid].src = "/tiles/" + tid
+						window.TileImgCache[tid].src = "tiles/" + tid
 						window.TileImgCache[tid].description = data[i].desc;
 						window.TileImgCache[tid].water = data[i].water;
 						window.TileImgCache[tid].rock = data[i].rock;
@@ -69,7 +69,7 @@
 						m.onload = function() {
 							window.imagesLoaded++;
 						}
-						m.src = "/image/" + data[i].id;
+						m.src = "image/" + data[i].id;
 						window.ImgCache[data[i].id] = m;
 					}
 					setTimeout(checkImageLoads, 250);
@@ -114,7 +114,7 @@
     	if (id == null) id = 1;
     	if (callWhenDone == null) callWhenDone = firstTimeInit;
 		var xhrArgs = {
-				url: "/area/" + id,
+				url: "area/" + id,
 				handleAs: "json",
 				load: function(data) {
 					currentArea = data;
