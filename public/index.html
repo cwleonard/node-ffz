@@ -133,7 +133,8 @@
     	    
     	        if (!sckt) {
     	
-                    sckt = io.connect("http://localhost:4000");
+    	        	var urlParts = window.location.href.split("/");
+                    sckt = io.connect(urlParts[0] + "//" + urlParts[2]);
                     sckt.on("connect", function() {
                         console.log("socket connected");
                         dojo.byId("socketstatus").innerHTML = "websockets? <span style='color: green'>ok</span>";
