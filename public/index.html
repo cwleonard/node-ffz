@@ -135,8 +135,8 @@
     	
     	        	var urlParts = window.location.href.split("/");
     	        	var cUrl = urlParts[0] + "//" + urlParts[2];
-    	        	for (var i = 3; i < urlParts.length - 1; i++) {
-    	        		cUrl += "/" + urlParts[i];
+    	        	if (!window.location.port) {
+    	        		cUrl += ':4000';
     	        	}
                     sckt = io.connect(cUrl);
                     sckt.on("connect", function() {
