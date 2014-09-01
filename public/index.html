@@ -134,7 +134,11 @@
     	        if (!sckt) {
     	
     	        	var urlParts = window.location.href.split("/");
-                    sckt = io.connect(urlParts[0] + "//" + urlParts[2]);
+    	        	var cUrl = urlParts[0] + "//" + urlParts[2];
+    	        	for (var i = 3; i < urlParts.length - 1; i++) {
+    	        		cUrl += "/" + urlParts[i];
+    	        	}
+                    sckt = io.connect(cUrl);
                     sckt.on("connect", function() {
                         console.log("socket connected");
                         dojo.byId("socketstatus").innerHTML = "websockets? <span style='color: green'>ok</span>";
@@ -510,7 +514,7 @@ if (world.objectList) {
       function weatherCheck() {
       
           dojo.xhrGet({
-              url: "/weather",
+              url: "weather",
               handleAs: "json",
               load: setWeather
           });
@@ -558,7 +562,7 @@ if (world.objectList) {
     <p><input type="button" value="pause" onclick="pause();"></p>
          
     <p>Weather data provided by<br/>
-    <a href="http://www.wunderground.com"><img src="/wundergroundLogo_4c_horz.png"/></a></p>
+    <a href="http://www.wunderground.com"><img src="wundergroundLogo_4c_horz.png"/></a></p>
          
     </div>
   </body>
