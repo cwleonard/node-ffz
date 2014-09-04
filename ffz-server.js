@@ -8,9 +8,10 @@ var passport = require('passport');
 var LocalStrategy = require('passport-local').Strategy;
 var logger = require('morgan');
 var mysql = require('mysql');
+var http = require('http');
 
 var app = express();
-var server = require('http').Server(app);
+var server = http.Server(app);
 var io = require('socket.io')(server);
 
 var conf = JSON.parse(fs.readFileSync('config.json', { encoding: 'utf-8' }));
@@ -185,6 +186,31 @@ app.get('/area/:n', function(req, res, next) {
 // ------------------------------------- weather stuff
 
 
+function putLatestWeather(data, cb) {
+	
+	var STORE_WEATHER = 'INSERT INTO weather (zip, temperature, conditions) VALUES (?, ?, ?)';
+
+	var a = [ data.current_observation.display_location.zip,
+	          data.current_observation.temp_f,
+	          data.current_observation.weather ];
+	
+	pool.query(STORE_WEATHER, a, function(err, result) {
+		
+		if (err) {
+			cb(err);
+		} else {
+			if (result.affectedRows === 1) {
+				console.log('---> updated weather data for ' + a[0] + ': ' + a[1] + ' ' + a[2]);
+				cb(null);
+			} else {
+				cb(new Error('no data inserted!'));
+			}
+		}
+		
+	});
+	
+}
+
 function getLatestWeather(zip, cb) {
 	
 	var WEATHER_QUERY = 'SELECT temperature as temp, conditions FROM weather WHERE zip = ? AND tstamp = (SELECT max(tstamp) FROM weather WHERE zip = ?)';
@@ -199,6 +225,25 @@ function getLatestWeather(zip, cb) {
 				cb(null, null);
 			}
 		}
+	});
+	
+}
+
+function pullWeatherData(zip, cb) {
+	
+	http.get("http://api.wunderground.com/api/" + conf.wunderkey + "/conditions/q/" + zip + ".json", function(res) {
+		
+		var wData = '';
+		res.on('data', function(chunk) {
+			wData += chunk;
+		});
+		res.on('end', function() {
+			var data = JSON.parse(wData);
+			cb(null, data);
+		});
+		
+	}).on('error', function(e) {
+		cb(e);
 	});
 	
 }
@@ -225,7 +270,29 @@ setInterval(function() {
 		}
 	});
 
-}, 150000);
+}, 300000);
+
+
+function weatherTimer() {
+	
+	pullWeatherData('17084', function(err, data) {
+		if (err) {
+			console.log(err);
+		} else {
+			putLatestWeather(data, function(err) {
+				if (err) {
+					console.log(err);
+				} else {
+					setTimeout(weatherTimer, 1800000);
+				}
+			});
+		}
+	});
+	
+	
+}
+
+weatherTimer(); // run now, and then every 30 minutes
 
 //------------------------------------------------------
 

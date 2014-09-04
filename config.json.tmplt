@@ -1,5 +1,6 @@
 {
 	"secret": "hoppy frog",
+	"wunderkey": "00000000000000000",
 	"database": {
 		"host": "localhost",
 		"user": "user",
