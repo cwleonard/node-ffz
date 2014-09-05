@@ -6,7 +6,7 @@
 	    canvas { border: 1px solid #000000; } 
     </style>
     <!--[if IE]><script src="scripts/excanvas.compiled.js"></script><![endif]--> 
-    <script src="//ajax.googleapis.com/ajax/libs/dojo/1.4.5/dojo/dojo.js"> djConfig="parseOnLoad: true"></script>
+    <script src="//code.jquery.com/jquery-1.11.0.min.js"></script>
     <script type="text/javascript" src="js/soundmanager2-nodebug-jsmin.js"></script>
     <script type="text/javascript" src="socket.io/socket.io.js"></script>
     <script type="text/javascript" src="js/microevent.js"></script>
@@ -141,7 +141,7 @@
                     sckt = io.connect(cUrl);
                     sckt.on("connect", function() {
                         console.log("socket connected");
-                        dojo.byId("socketstatus").innerHTML = "websockets? <span style='color: green'>ok</span>";
+                        $("#socketstatus").html("websockets? <span style='color: green'>ok</span>");
                         frog.bind('move', function(fdata) {
                             fdata.inArea = currentArea.id;
                             sckt.emit("frogmove", fdata);
@@ -202,7 +202,7 @@
                 
             } catch (e) {
                 console.log("sockets not available! " + e);
-                dojo.byId("socketstatus").innerHTML = "websockets? <span style='color: red'>failed</span>";
+                $("#socketstatus").html("websockets? <span style='color: red'>failed</span>");
             }
     	
     		updateVar = window.setInterval(update, 35);
@@ -218,15 +218,16 @@
         if (frog == null) {
             frog = new Frog();
             frog.position = { x: 20, y: 20 };
-            dojo.byId("myfrogid").innerHTML = "Your frog id is " + frog.uid;
+            $("#myfrogid").html("Your frog id is " + frog.uid);
         }
         
         canvas = document.getElementById("game");
         ctx = canvas.getContext("2d");
 
-        dojo.connect(document, "onkeydown", keyDownHandler);
-        dojo.connect(document, "onkeyup", keyUpHandler);
-        dojo.connect(canvas, "ontouchstart", canvasTouchHandler);
+        $(canvas).bind('touchstart', canvasTouchHandler);
+        $(document).keydown(function(e) { newKeyHandler(e); });
+        $(document).keyup(function(e) { newKeyHandler(e); });
+        
         
         weatherCheck();
         
@@ -269,7 +270,7 @@ if (world.objectList) {
 
          for (var qq = 0; qq < world.objectList.length; qq++) {
               var xx = world.objectList[qq];
-              var o = dojo.clone(ObjCache[xx.type]);
+              var o = jQuery.extend({}, ObjCache[xx.type]);
               var sp = new Sprite(o, 0, 0);
               sp.position.x = xx.position.x;
               sp.position.y = xx.position.y;
@@ -444,53 +445,66 @@ if (world.objectList) {
 
       }
 
-      function keyUpHandler(e) {
+      var lastKey = 0;
+      function newKeyHandler(event) {
+			
+			if (event.type == "keyup") {
+				
+				if (event.keyCode == lastKey) {
+					frog.stopMoving();
+					lastKey = 0;
+				}
+				
+			} else if (event.type == "keydown") {
 
-          switch(e.keyCode) {
+				// see if we're just holding the same key down
+				if (event.keyCode == lastKey) {
+					event.preventDefault();
+					return;
+				}
+				
+				switch (event.keyCode) {
+				case 37:
+				case 65:
+				case 97:
+					// LEFT ARROW or A
+					frog.moveLeft();
+					event.preventDefault();
+					break;
+				case 38:
+				case 87:
+				case 119:
+					// UP ARROW or W
+					frog.moveUp();
+					event.preventDefault();
+					break;
+				case 39:
+				case 68:
+				case 100:
+					// RIGHT ARROW or D
+					frog.moveRight();
+					event.preventDefault();
+					break;
+				case 40:
+				case 83:
+				case 115:
+					// DOWN ARROW or S
+					frog.moveDown();
+					event.preventDefault();
+					break;
+				case 82:
+	             	frog.ribbit(ribbitSound);
+					break;
+				}
+				lastKey = event.keyCode;
 
-          case dojo.keys.LEFT_ARROW:
-          case dojo.keys.RIGHT_ARROW:
-          case dojo.keys.UP_ARROW:
-          case dojo.keys.DOWN_ARROW:
-              frog.stopMoving();
-              break;
-
-          }
-
-      }
-      
-      function keyDownHandler(e) {
-
-          if (frog.moving) return;
-    	  
-          switch(e.keyCode) {
-
-          case dojo.keys.LEFT_ARROW:
-              frog.moveLeft();
-              break;
-          case dojo.keys.RIGHT_ARROW:
-              frog.moveRight();
-              break;
-          case dojo.keys.UP_ARROW:
-              frog.moveUp();
-              break;
-          case dojo.keys.DOWN_ARROW:
-              frog.moveDown();
-              break;
-          case 82:
-              frog.ribbit(ribbitSound);
-        	  //ribbitSound.play();
-        	  break;
-          default:
-              console.debug(e.keyCode);
-
-          }
-    	  
-      }
+			}
+			
+      }      
       
       function canvasTouchHandler(e) {
       
-          if (e.touches.length == 1) {
+          if (e.originalEvent.touches.length == 1) {
               frog.ribbit(ribbitSound);
           }
       
@@ -513,11 +527,8 @@ if (world.objectList) {
       
       function weatherCheck() {
       
-          dojo.xhrGet({
-              url: "weather",
-              handleAs: "json",
-              load: setWeather
-          });
+          $.get("weather", setWeather, "json");
+          
           if (!sckt) {
               console.log("websocket not available - polling for weather");
               window.setTimeout(weatherCheck, 300000);
@@ -527,15 +538,16 @@ if (world.objectList) {
       
       function setWeather(w) {
           console.log("setting weather");
-          dojo.byId("temp").innerHTML = w.temp + "&deg;F";
-          dojo.byId("weather").innerHTML = w.conditions;
+          $("#temp").html(w.temp + "&deg;F");
+          $("#weather").html(w.conditions);
           window.lastKnownWeather = w;
           frog.temperature = w.temp;
           world.weather = w.conditions;
       }
 
-      dojo.addOnLoad(loadTiles);
-      
+      $(function() {
+    	  loadTiles();
+      });
       
     </script>
     <style type="text/css">
