@@ -190,24 +190,30 @@ function putLatestWeather(data, cb) {
 	
 	var STORE_WEATHER = 'INSERT INTO weather (zip, temperature, conditions) VALUES (?, ?, ?)';
 
-	var a = [ data.current_observation.display_location.zip,
-	          data.current_observation.temp_f,
-	          data.current_observation.weather ];
-	
-	pool.query(STORE_WEATHER, a, function(err, result) {
-		
-		if (err) {
-			cb(err);
-		} else {
-			if (result.affectedRows === 1) {
-				console.log('---> updated weather data for ' + a[0] + ': ' + a[1] + ' ' + a[2]);
-				cb(null);
-			} else {
-				cb(new Error('no data inserted!'));
-			}
-		}
-		
-	});
+	if (data && data.current_observation && data.current_observation.display_location) {
+
+	    var a = [ data.current_observation.display_location.zip,
+	              data.current_observation.temp_f,
+	              data.current_observation.weather ];
+
+	    pool.query(STORE_WEATHER, a, function(err, result) {
+
+	        if (err) {
+	            cb(err);
+	        } else {
+	            if (result.affectedRows === 1) {
+	                console.log('---> updated weather data for ' + a[0] + ': ' + a[1] + ' ' + a[2]);
+	                cb(null);
+	            } else {
+	                cb(new Error('no data inserted!'));
+	            }
+	        }
+
+	    });
+
+	} else {
+	    cb(new Error('data was missing'));
+	}
 	
 }
 
@@ -282,9 +288,8 @@ function weatherTimer() {
 			putLatestWeather(data, function(err) {
 				if (err) {
 					console.log(err);
-				} else {
-					setTimeout(weatherTimer, 1800000);
 				}
+				setTimeout(weatherTimer, 1800000);
 			});
 		}
 	});
